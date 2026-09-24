@@ -35,24 +35,27 @@ notificar o usuário da conclusão de uma análise(opcional)
 
 Aspectos técnicos:
 
+CRUD dos arquivos de lote dos posts
+
 
 Criação de filas de processamento com Spring AMQP / RabbitMQ (1);
 Desacoplar a submissão do lote via APIs REST (Spring MVC) do processamento assíncrono (chamada ao LLM), garantindo escalabilidade horizontal e controle de concorrência com Spring Boot.
 
 
-
 Gerenciamento do consumo de tokens e persistência com Spring Data (2);
 Medir, controlar e otimizar o consumo de tokens, registrando métricas e persistindo relatórios via Spring Data JPA para comprovação da economia.
 
+
 Gerar logs e observabilidade com Spring Boot Actuator (3);
 Garantir a observabilidade técnica e infraestrutural utilizando Spring Boot Actuator e Micrometer para coletar métricas de saúde da aplicação, vazão de filas e estado da resiliência, enquanto os KPIs e métricas de negócio são fornecidos por endpoints REST dedicados consultando o banco de dados via Spring Data JPA.
+Grafana
+
 
 Resiliência na integração com LLMs usando Resilience4j (4).
 Garantir a disponibilidade contínua através de padrões de Retry e Circuit Breaker (Resilience4j integrado ao Spring) para contornar oscilações, rate limits e degradações nos provedores de LLM.
 
 
 Sugestão de APIs
-
 
 APIs REST da Aplicação (Endpoints Internos do SocialGuard)
 POST /api/v1/batches: Recebe e enfileira um lote de posts para classificação assíncrona.
@@ -73,3 +76,42 @@ Métricas e Dashboard
    Taxa de Erro e Sucesso da API LLM: Percentual de chamadas concluídas com sucesso vs. falhas/timeouts nos provedores de LLM.
 
 
+
+
+{
+batchId: 1,
+companyId: 1,
+createdAt: "2024-06-01T10:00:00Z",
+updatedAt: "2024-06-01T10:05:00Z",
+completedAt: "2024-06-01T10:05:00Z",
+status: "CONCLUÍDO",
+tokensConsumed: 1500,
+LLM_model: "gpt-4",
+
+
+"comments":
+[
+{
+"postId": 1,
+"commentId": 1,
+"body": "laudantium enim quasi est quidem magnam voluptate ipsam eos\ntempora quo necessitatibus\ndolor quam autem quasi\nreiciendis et nam sapiente accusantium",
+"createdAt": "2024-06-01T10:00:00Z",
+"updatedAt": "2024-06-01T10:05:00Z",
+} ,
+{
+"postId": 1,
+"id": 2,
+"name": "quo vero reiciendis velit similique earum",
+"email": "Jayne_Kuhic@sydney.com",
+"body": "est natus enim nihil est dolore omnis voluptatem numquam\net omnis occaecati quod ullam at\nvoluptatem error expedita pariatur\nnihil sint nostrum voluptatem reiciendis et"
+},
+{
+"postId": 1,
+"id": 3,
+"name": "odio adipisci rerum aut animi",
+"email": "Nikita@garfield.biz",
+"body": "quia molestiae reprehenderit quasi aspernatur\naut expedita occaecati aliquam eveniet laudantium\nomnis quibusdam delectus saepe quia accusamus maiores nam est\ncum et ducimus et vero voluptates excepturi deleniti ratione"
+}
+]
+
+}
