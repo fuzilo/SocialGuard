@@ -27,7 +27,7 @@ public class BatchService {
         Batch batch = new Batch();
         batch.setCompanyId(request.companyId());
         batch.setLlmModel(request.llmModel());
-        batch.setStatus(BatchStatus.PENDENTE);
+        batch.setStatus(BatchStatus.PENDING);
         request.comments().stream().map(this::toComment).forEach(batch::addComment);
         return BatchResponse.from(batchRepository.save(batch));
     }
@@ -82,7 +82,7 @@ public class BatchService {
     }
 
     private boolean isFinal(BatchStatus status) {
-        return status == BatchStatus.CONCLUIDO || status == BatchStatus.FALHOU;
+        return status == BatchStatus.COMPLETED || status == BatchStatus.FAILED;
     }
 
     private Comment toComment(CommentRequest request) {

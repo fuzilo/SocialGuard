@@ -1,6 +1,7 @@
 package com.unesp.SocialGuard.dto;
 
 import com.unesp.SocialGuard.domain.Comment;
+import com.unesp.SocialGuard.domain.InferenceResult;
 
 import java.time.LocalDateTime;
 
@@ -13,7 +14,7 @@ public record CommentResponse(
         String body,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        String inferenceResult
+        InferenceResult inferenceResult
 ) {
     public static CommentResponse from(Comment c) {
         return new CommentResponse(c.getId(), c.getPostId(), c.getCommentId(), c.getName(), c.getEmail(),

@@ -49,5 +49,5 @@ public class Comment {
     private LocalDateTime updatedAt;
 
     @Column(name = "inference_result")
-    private String inferenceResult;
+    private InferenceResult inferenceResult;
 }
