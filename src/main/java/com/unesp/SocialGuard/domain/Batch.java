@@ -71,7 +71,7 @@ public class Batch {
             batchId = UUID.randomUUID().toString();
         }
         if (status == null) {
-            status = BatchStatus.PENDENTE;
+            status = BatchStatus.PENDING;
         }
         createdAt = LocalDateTime.now();
         updatedAt = createdAt;
