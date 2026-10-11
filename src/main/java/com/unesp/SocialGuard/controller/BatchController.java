@@ -1,7 +1,9 @@
 package com.unesp.SocialGuard.controller;
 
 import com.unesp.SocialGuard.domain.BatchStatus;
+import com.unesp.SocialGuard.dto.BatchClaimResponse;
 import com.unesp.SocialGuard.dto.BatchCreateRequest;
+import com.unesp.SocialGuard.dto.BatchResultsRequest;
 import com.unesp.SocialGuard.dto.BatchResponse;
 import com.unesp.SocialGuard.dto.BatchUpdateRequest;
 import com.unesp.SocialGuard.service.BatchService;
@@ -35,6 +37,27 @@ public class BatchController {
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(created.batchId()).toUri();
         return ResponseEntity.created(location).body(created);
+    }
+
+    @PostMapping("/{id}/enqueue")
+    public ResponseEntity<Void> enqueue(@PathVariable String id) {
+        batchService.enqueue(id);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/{id}/claim")
+    public BatchClaimResponse claim(@PathVariable String id) {
+        return batchService.claim(id);
+    }
+
+    @PutMapping("/{id}/results")
+    public BatchResponse saveResults(@PathVariable String id, @Valid @RequestBody BatchResultsRequest request) {
+        return batchService.saveResults(id, request);
+    }
+
+    @PostMapping("/{id}/failure")
+    public BatchResponse markFailed(@PathVariable String id) {
+        return batchService.markFailed(id);
     }
 
     @GetMapping

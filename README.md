@@ -1,5 +1,31 @@
 SocialGuard - Classificador Automatizado de Conteúdo.
 
+## Processamento assíncrono de lotes
+
+O `POST /api/v1/batches` persiste o lote como `PENDING` e publica no RabbitMQ somente o `batchId` (corpo da mensagem como texto simples). A fila durável `socialguard.batch.processing` é ligada ao exchange `socialguard.batch` pela routing key `batch.process`. Mensagens rejeitadas sem requeue são encaminhadas para `socialguard.batch.failed`; o consumidor OpenMock (API SocialGuard local: `http://localhost:8084`, OpenMock: porta `8082`) deve limitar retries transitórios e confirmar a mensagem somente depois de persistir o resultado ou reconhecer que o lote já foi reivindicado/concluído.
+
+O OpenMock é um consumidor externo. Para cada mensagem, deve:
+
+1. Consultar `GET /api/v1/batches/{id}` para carregar do SocialGuard os dados que não estão na mensagem.
+2. Chamar `POST /api/v1/batches/{id}/claim`. Só processar quando a resposta tiver `claimed: true`; quando `false`, confirmar a mensagem sem repetir o processamento.
+3. Persistir todas as classificações com `PUT /api/v1/batches/{id}/results`, usando o `id` de cada comentário retornado pelo GET:
+
+```json
+{
+  "comments": [
+    { "id": 12, "inferenceResult": "SPAM" }
+  ],
+  "tokensConsumed": 1500,
+  "llmModel": "gpt-4"
+}
+```
+
+O endpoint de resultados valida que cada comentário do lote apareça uma vez, mantém os dados originais e conclui o lote. Repetir o mesmo envio após conclusão é idempotente; resultados diferentes ou transições inválidas retornam `409 Conflict`. Para falha permanente, o OpenMock usa `POST /api/v1/batches/{id}/failure`; o lote só muda de `PROCESSING` para `FAILED`.
+
+Se a publicação direta falhar após a persistência, o `POST` retorna `503 Service Unavailable`, incluindo `batchId` no Problem Detail. O registro continua `PENDING`; após a recuperação do broker, reenfileire com `POST /api/v1/batches/{id}/enqueue`. Um timeout de confirmação pode ter resultado ambíguo; mensagens duplicadas são seguras por causa da reivindicação atômica. Lotes abandonados em `PROCESSING` também exigem recuperação operacional: retornar o estado para `PENDING` por `PUT /api/v1/batches/{id}` e reenfileirar.
+
+Configuração padrão para execução local: RabbitMQ em `localhost:5672`, usuário/senha `aluno`. Configure `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` e `RABBITMQ_CONFIRM_TIMEOUT`; nomes de exchange/fila/routing key também podem ser substituídos pelas variáveis `BATCH_EXCHANGE`, `BATCH_QUEUE`, `BATCH_ROUTING_KEY`, `BATCH_DLX`, `BATCH_DLQ` e `BATCH_DLX_ROUTING_KEY`.
+
 SocialGuard é um software capaz de orquestrar fluxos de classificação de posts escritos de redes sociais, para moderar conteúdos impróprios. Validações manuais e individuais são custosas e não escalam. Chamadas individuais a LLMs para cada post geram custo alto de token. Necessidade de padronização dos registros e auditoria das decisões de moderação.
 O principal objetivo é reduzir custos de operação e consumo de tokens. Isso pode ser obtido, utilizando-se chamadas em lote às APIs dos modelos de IA generativa.
 

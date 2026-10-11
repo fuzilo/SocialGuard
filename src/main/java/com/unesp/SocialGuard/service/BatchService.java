@@ -3,10 +3,15 @@ package com.unesp.SocialGuard.service;
 import com.unesp.SocialGuard.domain.Batch;
 import com.unesp.SocialGuard.domain.BatchStatus;
 import com.unesp.SocialGuard.domain.Comment;
+import com.unesp.SocialGuard.domain.InferenceResult;
+import com.unesp.SocialGuard.dto.BatchClaimResponse;
 import com.unesp.SocialGuard.dto.BatchCreateRequest;
+import com.unesp.SocialGuard.dto.BatchResultsRequest;
 import com.unesp.SocialGuard.dto.BatchResponse;
 import com.unesp.SocialGuard.dto.BatchUpdateRequest;
 import com.unesp.SocialGuard.dto.CommentRequest;
+import com.unesp.SocialGuard.exception.BatchEnqueueException;
+import com.unesp.SocialGuard.exception.BatchStateConflictException;
 import com.unesp.SocialGuard.exception.ResourceNotFoundException;
 import com.unesp.SocialGuard.repository.BatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,21 +20,98 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class BatchService {
 
     private final BatchRepository batchRepository;
+    private final BatchMessagePublisher messagePublisher;
 
-    @Transactional
     public BatchResponse create(BatchCreateRequest request) {
         Batch batch = new Batch();
         batch.setCompanyId(request.companyId());
         batch.setLlmModel(request.llmModel());
         batch.setStatus(BatchStatus.PENDING);
         request.comments().stream().map(this::toComment).forEach(batch::addComment);
-        return BatchResponse.from(batchRepository.save(batch));
+        Batch saved = batchRepository.saveAndFlush(batch);
+        publish(saved.getBatchId());
+        return BatchResponse.from(saved);
+    }
+
+    public void enqueue(String batchId) {
+        Batch batch = getBatch(batchId);
+        if (batch.getStatus() != BatchStatus.PENDING) {
+            throw new BatchStateConflictException(
+                    "Somente lotes PENDING podem ser publicados novamente: " + batchId);
+        }
+        publish(batchId);
+    }
+
+    @Transactional
+    public BatchClaimResponse claim(String batchId) {
+        int claimed = batchRepository.claimIfPending(
+                batchId, BatchStatus.PENDING, BatchStatus.PROCESSING, LocalDateTime.now());
+        Batch batch = getBatch(batchId);
+        return new BatchClaimResponse(claimed == 1, batch.getStatus());
+    }
+
+    @Transactional
+    public BatchResponse markFailed(String batchId) {
+        Batch batch = getBatch(batchId);
+        if (batch.getStatus() == BatchStatus.FAILED) {
+            return BatchResponse.from(batch);
+        }
+        if (batch.getStatus() != BatchStatus.PROCESSING) {
+            throw new BatchStateConflictException(
+                    "Somente lotes PROCESSING podem ser marcados como FAILED: " + batchId);
+        }
+        batch.setStatus(BatchStatus.FAILED);
+        batch.setCompletedAt(LocalDateTime.now());
+        return BatchResponse.from(batchRepository.saveAndFlush(batch));
+    }
+
+    @Transactional
+    public BatchResponse saveResults(String batchId, BatchResultsRequest request) {
+        Batch batch = getBatch(batchId);
+        Map<Long, InferenceResult> results = request.comments().stream()
+                .collect(Collectors.toMap(
+                        result -> result.id(),
+                        result -> result.inferenceResult(),
+                        (first, duplicate) -> {
+                            throw new BatchStateConflictException("commentId duplicado nos resultados.");
+                        }));
+        Map<Long, Comment> commentsById = batch.getComments().stream()
+                .collect(Collectors.toMap(Comment::getId, Function.identity()));
+
+        if (!commentsById.keySet().equals(results.keySet())) {
+            throw new BatchStateConflictException(
+                    "Os resultados devem conter exatamente os comentários do lote.");
+        }
+        if (batch.getStatus() == BatchStatus.COMPLETED) {
+            if (hasSameResults(batch, request, commentsById, results)) {
+                return BatchResponse.from(batch);
+            }
+            throw new BatchStateConflictException("O lote já foi concluído com resultados diferentes.");
+        }
+        if (batch.getStatus() != BatchStatus.PROCESSING) {
+            throw new BatchStateConflictException(
+                    "Somente lotes PROCESSING podem receber resultados: " + batchId);
+        }
+
+        commentsById.forEach((commentId, comment) -> comment.setInferenceResult(results.get(commentId)));
+        if (request.tokensConsumed() != null) {
+            batch.setTokensConsumed(request.tokensConsumed());
+        }
+        if (request.llmModel() != null) {
+            batch.setLlmModel(request.llmModel());
+        }
+        batch.setStatus(BatchStatus.COMPLETED);
+        batch.setCompletedAt(LocalDateTime.now());
+        return BatchResponse.from(batchRepository.saveAndFlush(batch));
     }
 
     @Transactional(readOnly = true)
@@ -83,6 +165,29 @@ public class BatchService {
 
     private boolean isFinal(BatchStatus status) {
         return status == BatchStatus.COMPLETED || status == BatchStatus.FAILED;
+    }
+
+    private boolean hasSameResults(
+            Batch batch,
+            BatchResultsRequest request,
+            Map<Long, Comment> commentsById,
+            Map<Long, InferenceResult> results) {
+        if (request.tokensConsumed() != null && request.tokensConsumed() != batch.getTokensConsumed()) {
+            return false;
+        }
+        if (request.llmModel() != null && !request.llmModel().equals(batch.getLlmModel())) {
+            return false;
+        }
+        return commentsById.entrySet().stream()
+                .allMatch(entry -> results.get(entry.getKey()) == entry.getValue().getInferenceResult());
+    }
+
+    private void publish(String batchId) {
+        try {
+            messagePublisher.publish(batchId);
+        } catch (RuntimeException ex) {
+            throw new BatchEnqueueException(batchId, ex);
+        }
     }
 
     private Comment toComment(CommentRequest request) {
