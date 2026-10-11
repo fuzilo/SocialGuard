@@ -16,6 +16,18 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(BatchEnqueueException.class)
+    public ProblemDetail handleEnqueueFailure(BatchEnqueueException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+        problem.setProperty("batchId", ex.getBatchId());
+        return problem;
+    }
+
+    @ExceptionHandler(BatchStateConflictException.class)
+    public ProblemDetail handleStateConflict(BatchStateConflictException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         String detail = ex.getBindingResult().getFieldErrors().stream()
