@@ -24,6 +24,16 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Regras de negócio do ciclo de vida de um lote.
+ *
+ * <pre>
+ * PENDING ──claim──▶ PROCESSING ──saveResults──▶ COMPLETED
+ *                         └──────markFailed────▶ FAILED
+ * </pre>
+ *
+ * Violações dessas transições geram {@link BatchStateConflictException} (HTTP 409).
+ */
 @Service
 @RequiredArgsConstructor
 public class BatchService {
@@ -31,6 +41,12 @@ public class BatchService {
     private final BatchRepository batchRepository;
     private final BatchMessagePublisher messagePublisher;
 
+    /**
+     * Persiste o lote como {@code PENDING} e só depois publica seu {@code batchId} na fila.
+     *
+     * @throws BatchEnqueueException se a publicação falhar; o lote permanece salvo como {@code PENDING}
+     *                               e pode ser reenfileirado com {@link #enqueue(String)}
+     */
     public BatchResponse create(BatchCreateRequest request) {
         Batch batch = new Batch();
         batch.setCompanyId(request.companyId());
@@ -42,6 +58,11 @@ public class BatchService {
         return BatchResponse.from(saved);
     }
 
+    /**
+     * Republica um lote {@code PENDING} na fila (recuperação após falha do broker).
+     *
+     * @throws BatchStateConflictException se o lote não estiver {@code PENDING}
+     */
     public void enqueue(String batchId) {
         Batch batch = getBatch(batchId);
         if (batch.getStatus() != BatchStatus.PENDING) {
@@ -51,6 +72,10 @@ public class BatchService {
         publish(batchId);
     }
 
+    /**
+     * Reivindica atomicamente um lote {@code PENDING}, movendo-o para {@code PROCESSING}.
+     * Apenas um consumidor recebe {@code claimed = true}; mensagens duplicadas recebem {@code false}.
+     */
     @Transactional
     public BatchClaimResponse claim(String batchId) {
         int claimed = batchRepository.claimIfPending(
@@ -59,6 +84,9 @@ public class BatchService {
         return new BatchClaimResponse(claimed == 1, batch.getStatus());
     }
 
+    /**
+     * Marca um lote {@code PROCESSING} como {@code FAILED}. Idempotente para lotes já {@code FAILED}.
+     */
     @Transactional
     public BatchResponse markFailed(String batchId) {
         Batch batch = getBatch(batchId);
@@ -74,6 +102,12 @@ public class BatchService {
         return BatchResponse.from(batchRepository.saveAndFlush(batch));
     }
 
+    /**
+     * Grava a classificação de cada comentário e conclui o lote.
+     * <p>
+     * Os resultados devem conter cada comentário do lote exatamente uma vez. Reenviar os mesmos
+     * resultados para um lote já {@code COMPLETED} é idempotente; resultados diferentes geram conflito.
+     */
     @Transactional
     public BatchResponse saveResults(String batchId, BatchResultsRequest request) {
         Batch batch = getBatch(batchId);
@@ -134,6 +168,10 @@ public class BatchService {
         return batches.stream().map(BatchResponse::from).toList();
     }
 
+    /**
+     * Atualização administrativa, sem validação de transição; campos nulos são ignorados.
+     * Usada, por exemplo, para devolver a {@code PENDING} um lote abandonado em {@code PROCESSING}.
+     */
     @Transactional
     public BatchResponse update(String batchId, BatchUpdateRequest request) {
         Batch batch = getBatch(batchId);
