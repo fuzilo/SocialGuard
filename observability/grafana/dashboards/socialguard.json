@@ -1,7 +1,7 @@
 {
   "uid": "socialguard-overview",
   "title": "SocialGuard - Visão Geral",
-  "tags": ["socialguard", "spring-boot"],
+  "tags": ["socialguard", "openmock", "observability"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
@@ -11,10 +11,10 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Status da aplicação",
+      "title": "Status dos serviços",
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "refId": "A", "expr": "up{job=\"socialguard\"}" }],
+      "targets": [{ "refId": "A", "expr": "up{job=~\"socialguard|OpenMock\"}", "legendFormat": "{{job}}" }],
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -28,8 +28,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Uptime",
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "title": "Uptime do SocialGuard",
+      "gridPos": { "x": 6, "y": 0, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "refId": "A", "expr": "process_uptime_seconds{job=\"socialguard\"}" }],
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
@@ -39,19 +39,36 @@
       "id": 3,
       "type": "stat",
       "title": "Requisições HTTP (5 min)",
-      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 10, "y": 0, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "refId": "A", "expr": "sum(increase(http_server_requests_seconds_count{job=\"socialguard\", uri!~\"/actuator.*\"}[5m]))" }],
+      "targets": [{ "refId": "A", "expr": "sum(increase(http_server_requests_seconds_count{job=~\"socialguard|OpenMock\", uri!~\"/actuator.*\"}[5m]))" }],
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "Erros 5xx (5 min)",
-      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "title": "Erros 4xx (5 min)",
+      "gridPos": { "x": 14, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "refId": "A", "expr": "sum(increase(http_server_requests_seconds_count{job=\"socialguard\", status=~\"5..\"}[5m])) or vector(0)" }],
+      "targets": [{ "refId": "A", "expr": "sum(increase(http_server_requests_seconds_count{job=~\"socialguard|OpenMock\", status=~\"4..\", uri!~\"/actuator.*\"}[5m])) or vector(0)" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Erros 5xx (5 min)",
+      "gridPos": { "x": 19, "y": 0, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum(increase(http_server_requests_seconds_count{job=~\"socialguard|OpenMock\", status=~\"5..\", uri!~\"/actuator.*\"}[5m])) or vector(0)" }],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -71,8 +88,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (method, uri, status) (rate(http_server_requests_seconds_count{job=\"socialguard\", uri!~\"/actuator.*\"}[1m]))",
-          "legendFormat": "{{method}} {{uri}} ({{status}})"
+          "expr": "sum by (job, method, uri) (rate(http_server_requests_seconds_count{job=~\"socialguard|OpenMock\", uri!~\"/actuator.*\"}[1m]))",
+          "legendFormat": "{{job}} {{method}} {{uri}}"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
@@ -86,22 +103,37 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, method, uri) (rate(http_server_requests_seconds_bucket{job=\"socialguard\", uri!~\"/actuator.*\"}[1m])))",
-          "legendFormat": "{{method}} {{uri}}",
+          "expr": "histogram_quantile(0.95, sum by (le, job, method, uri) (rate(http_server_requests_seconds_bucket{job=~\"socialguard|OpenMock\", uri!~\"/actuator.*\"}[1m])))",
+          "legendFormat": "{{job}} {{method}} {{uri}}",
           "exemplar": true
         }
       ],
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
     {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Erros HTTP por serviço e endpoint (req/s)",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (job, method, uri, status) (rate(http_server_requests_seconds_count{job=~\"socialguard|OpenMock\", status=~\"4..|5..\", uri!~\"/actuator.*\"}[1m]))",
+          "legendFormat": "{{job}} {{method}} {{uri}} ({{status}})"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
       "id": 7,
       "type": "timeseries",
       "title": "Memória JVM (heap)",
-      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
+      "gridPos": { "x": 0, "y": 20, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "refId": "A", "expr": "sum(jvm_memory_used_bytes{job=\"socialguard\", area=\"heap\"})", "legendFormat": "usado" },
-        { "refId": "B", "expr": "sum(jvm_memory_committed_bytes{job=\"socialguard\", area=\"heap\"})", "legendFormat": "alocado" }
+        { "refId": "A", "expr": "sum by (job) (jvm_memory_used_bytes{job=~\"socialguard|OpenMock\", area=\"heap\"})", "legendFormat": "{{job}} usado" },
+        { "refId": "B", "expr": "sum by (job) (jvm_memory_committed_bytes{job=~\"socialguard|OpenMock\", area=\"heap\"})", "legendFormat": "{{job}} alocado" }
       ],
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
     },
@@ -109,11 +141,11 @@
       "id": 8,
       "type": "timeseries",
       "title": "CPU",
-      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 8 },
+      "gridPos": { "x": 8, "y": 20, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "refId": "A", "expr": "process_cpu_usage{job=\"socialguard\"}", "legendFormat": "processo" },
-        { "refId": "B", "expr": "system_cpu_usage{job=\"socialguard\"}", "legendFormat": "sistema" }
+        { "refId": "A", "expr": "process_cpu_usage{job=~\"socialguard|OpenMock\"}", "legendFormat": "{{job}} processo" },
+        { "refId": "B", "expr": "system_cpu_usage{job=~\"socialguard|OpenMock\"}", "legendFormat": "{{job}} sistema" }
       ],
       "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] }
     },
@@ -121,12 +153,12 @@
       "id": 9,
       "type": "timeseries",
       "title": "Pool de conexões do banco (HikariCP)",
-      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 8 },
+      "gridPos": { "x": 16, "y": 20, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "refId": "A", "expr": "hikaricp_connections_active{job=\"socialguard\"}", "legendFormat": "ativas" },
-        { "refId": "B", "expr": "hikaricp_connections_idle{job=\"socialguard\"}", "legendFormat": "ociosas" },
-        { "refId": "C", "expr": "hikaricp_connections_pending{job=\"socialguard\"}", "legendFormat": "aguardando" }
+        { "refId": "A", "expr": "hikaricp_connections_active{job=~\"socialguard|OpenMock\"}", "legendFormat": "{{job}} ativas" },
+        { "refId": "B", "expr": "hikaricp_connections_idle{job=~\"socialguard|OpenMock\"}", "legendFormat": "{{job}} ociosas" },
+        { "refId": "C", "expr": "hikaricp_connections_pending{job=~\"socialguard|OpenMock\"}", "legendFormat": "{{job}} aguardando" }
       ],
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] }
     }

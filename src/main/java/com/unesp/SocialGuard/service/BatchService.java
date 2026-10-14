@@ -245,6 +245,8 @@ public class BatchService {
         comment.setName(request.name());
         comment.setEmail(request.email());
         comment.setBody(request.body());
+        comment.setCreatedAt(request.createdAt());
+        comment.setUpdatedAt(request.updatedAt());
         return comment;
     }
 }
