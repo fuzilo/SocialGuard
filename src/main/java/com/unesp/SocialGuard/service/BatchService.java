@@ -40,6 +40,7 @@ public class BatchService {
 
     private final BatchRepository batchRepository;
     private final BatchMessagePublisher messagePublisher;
+    private final TokenManagementService tokenManagementService;
 
     /**
      * Persiste o lote como {@code PENDING} e só depois publica seu {@code batchId} na fila.
@@ -139,6 +140,15 @@ public class BatchService {
         commentsById.forEach((commentId, comment) -> comment.setInferenceResult(results.get(commentId)));
         if (request.tokensConsumed() != null) {
             batch.setTokensConsumed(request.tokensConsumed());
+
+            tokenManagementService.recordAndOptimizeTokenUsage(new com.unesp.SocialGuard.dto.TokenRecordRequest(
+                    batchId,
+                    batch.getCompanyId(),
+                    batch.getLlmModel() != null ? batch.getLlmModel() : "gpt-4o-mini",
+                    request.tokensConsumed(),
+                    0,
+                    (int) (request.tokensConsumed() * 1.25)
+            ));
         }
         if (request.llmModel() != null) {
             batch.setLlmModel(request.llmModel());
