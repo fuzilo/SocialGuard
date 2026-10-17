@@ -49,35 +49,56 @@ sequenceDiagram
 
 ## Como executar
 
-Pré-requisitos: Java 21+ e Docker.
+Pré-requisitos: Docker Compose e acesso a **MySQL e RabbitMQ externos**. O Compose deste repositório sobe somente a API (JDK 24) e o frontend estático (Nginx).
+
+O `application.properties` é incluído automaticamente no JAR durante o build Docker e fornece a configuração padrão. O Compose ajusta apenas os hosts do MySQL e RabbitMQ para `host.docker.internal`, mantendo os demais padrões do arquivo. Se precisar alterar URL, porta do broker ou credenciais, copie `.env.example` para `.env` e descomente apenas as variáveis necessárias. No PowerShell:
+
+```powershell
+Copy-Item .env.example .env # Opcional: edite apenas os overrides necessários
+docker compose up --build -d
+```
+
+O frontend fica em **http://localhost:5000** e apresenta o projeto e a saúde da API. A consulta acontece ao abrir a página e pelo botão **Atualizar status**, sem atualização periódica. O Nginx encaminha `/health` para `/actuator/health` pela rede interna, sem CORS. O status agrega as dependências monitoradas; não acompanha o processamento dos lotes. Erros de conexão e respostas de saúde indisponível são exibidos explicitamente.
+
+Dentro de um container, `localhost` aponta para o próprio container. Use `host.docker.internal` para serviços publicados no host (Docker Desktop; o Compose também configura `host-gateway`). Se os serviços estiverem em outro Compose, use suas portas publicadas no host ou um endereço externo acessível; nomes de containers de outra rede não são resolvidos automaticamente. Garanta que banco e broker aceitem conexões da rede Docker.
+
+MySQL e RabbitMQ precisam estar disponíveis antes da inicialização da API. Se o banco estiver inacessível, a API pode não iniciar; corrija a conexão e execute `docker compose up -d api`. A página continua disponível para mostrar a falha de comunicação.
+
+Prometheus, Grafana e Tempo são mantidos em outro repositório. A configuração de tracing continua seguindo o `application.properties`; para desabilitar a exportação ou apontar para um coletor externo, declare explicitamente as variáveis da tabela abaixo em `services.api.environment`. Os endpoints de métricas continuam disponíveis para coleta externa. No Compose, a saúde retorna apenas o status agregado, sem componentes ou detalhes internos.
+
+### Execução local da API
+
+Para rodar a API sem Docker, use **JDK 24** e configure as variáveis de conexão para seus serviços externos conforme necessário. O `pom.xml` mantém o alvo de compilação Java 21, compatível com o JDK 24.
 
 ```bash
-# Infraestrutura: MySQL, phpMyAdmin, RabbitMQ, Prometheus, Tempo e Grafana
-docker compose up -d
-
 # Aplicação (porta 8084)
 ./mvnw spring-boot:run        # Windows: mvnw.cmd spring-boot:run
 ```
 
+O frontend do Compose usa a API do próprio Compose, não uma API iniciada separadamente no host.
+
 | Serviço | URL |
 |---|---|
+| Frontend | http://localhost:5000 |
 | API | http://localhost:8084/api/v1/batches |
 | Swagger UI | http://localhost:8084/swagger-ui.html |
+| Saúde da API | http://localhost:8084/actuator/health |
 | Actuator / Prometheus | http://localhost:8084/actuator/prometheus |
-| RabbitMQ Management | http://localhost:15672 (`aluno` / `aluno`) |
-| phpMyAdmin | http://localhost:8080 |
-| Grafana | http://localhost:3000 (`admin` / `admin`) |
-| Prometheus | http://localhost:9090 |
 
-O banco `social_guard` é criado automaticamente na primeira execução (`createDatabaseIfNotExist=true`, `ddl-auto=update`).
+As portas publicadas são configuradas em `services.api.ports` e `services.frontend.ports` no Compose. O banco `social_guard` é criado automaticamente quando a URL usa `createDatabaseIfNotExist=true` e o usuário tem permissão; as tabelas usam `ddl-auto=update`.
 
 ## Configuração
 
 Os valores padrão estão em `src/main/resources/application.properties` e podem ser substituídos por variáveis de ambiente:
 
+Variáveis de ambiente têm precedência sobre o arquivo: `SPRING_DATASOURCE_URL`, quando definida, substitui a URL inteira e deve incluir `jdbc:mysql://`. Sem essa variável, a URL é montada pelo arquivo usando `MYSQL_HOST` (padrão local `localhost`). Não é necessário copiar o arquivo separadamente no Dockerfile. Alterações no arquivo embutido exigem reconstruir a imagem com `docker compose up --build -d`.
+
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `RABBITMQ_HOST` | `localhost` | Host do broker |
+| `MYSQL_HOST` | `localhost` local; `host.docker.internal` no Compose | Host usado na URL JDBC padrão |
+| `SPRING_DATASOURCE_URL` | URL em `application.properties`, usando `MYSQL_HOST` | Override opcional da URL JDBC completa |
+| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | Configuração em `application.properties` | Overrides opcionais das credenciais do banco |
+| `RABBITMQ_HOST` | `localhost` local; `host.docker.internal` no Compose | Host do broker |
 | `RABBITMQ_PORT` | `5672` | Porta AMQP |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `aluno` / `aluno` | Credenciais |
 | `RABBITMQ_CONFIRM_TIMEOUT` | `5s` | Tempo máximo de espera pela confirmação do broker |
@@ -87,6 +108,12 @@ Os valores padrão estão em `src/main/resources/application.properties` e podem
 | `BATCH_DLX` | `socialguard.batch.dlx` | Dead-letter exchange |
 | `BATCH_DLQ` | `socialguard.batch.failed` | Fila de mensagens rejeitadas |
 | `BATCH_DLX_ROUTING_KEY` | `batch.failed` | Routing key da dead-letter |
+| `MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED` | Padrão do Spring Boot | Controle opcional da exportação; declarar no Compose para usar via `.env` |
+| `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces` | Endpoint OTLP HTTP; declarar no Compose para usar via `.env` |
+
+O Spring Boot não carrega `.env` automaticamente. O Compose usa esse arquivo para resolver os valores declarados em `services.api.environment`. As variáveis de conexão acima são repassadas explicitamente; quando um override opcional está ausente, não é enviado ao container e o padrão do `application.properties` permanece ativo. Uma variável definida como `NOME=` envia um valor vazio, substituindo o padrão; deixe a linha comentada para manter o padrão, especialmente para credenciais. Para os hosts, valores ausentes ou vazios usam `host.docker.internal` no Compose.
+
+Não versione `.env`. Para personalizar as variáveis `BATCH_*`, `RABBITMQ_CONFIRM_TIMEOUT` ou as de tracing via `.env`, declare-as também em `services.api.environment`.
 
 Mensagens rejeitadas sem *requeue* pelo consumidor vão para `socialguard.batch.failed`.
 
@@ -218,9 +245,12 @@ Os erros seguem o formato *Problem Details* (`application/problem+json`):
 
 ## Testes
 
+O build Docker empacota a API sem compilar ou executar testes. Execute-os separadamente antes de publicar as imagens.
+
 ```bash
 ./mvnw test                                  # suíte completa
 ./mvnw test -Dtest='Batch*Test'              # apenas testes unitários (sem infraestrutura)
+node --test frontend/tests/app.test.cjs     # estados da interface, Node.js 18+ (opcional)
 ```
 
 | Classe | Escopo |
@@ -229,7 +259,7 @@ Os erros seguem o formato *Problem Details* (`application/problem+json`):
 | `service/BatchMessagePublisherTest` | Publicação no RabbitMQ: ack, nack, mensagem não roteada, timeout e interrupção |
 | `controller/BatchControllerTest` | Camada web (`@WebMvcTest`): rotas, códigos HTTP, validação e mapeamento de exceções |
 | `domain/BatchTest` | Relacionamento lote–comentários e callbacks JPA |
-| `SocialGuardApplicationTests` | Sobe o contexto completo; **requer MySQL em execução** (`docker compose up -d db`) |
+| `SocialGuardApplicationTests` | Sobe o contexto completo; **requer MySQL externo acessível** e configuração das integrações |
 
 ---
 
