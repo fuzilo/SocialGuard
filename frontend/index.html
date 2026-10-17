@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="SocialGuard: moderação de conteúdo com classificação em lotes.">
+    <title>SocialGuard | Moderação de conteúdo</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <main>
+        <header class="brand"><span class="brand-mark" aria-hidden="true">SG</span> SocialGuard</header>
+        <section class="intro" aria-labelledby="title">
+            <p class="eyebrow">Moderação inteligente de conteúdo</p>
+            <h1 id="title">Mais contexto.<br>Menos custo.</h1>
+            <p class="lead">Classificação de comentários de redes sociais em lotes,
+                com processamento assíncrono e acompanhamento dos resultados.</p>
+        </section>
+        <section class="features" aria-label="Sobre o projeto">
+            <article><h2>Envio em lotes</h2><p>Agrupe comentários para reduzir chamadas individuais aos modelos de IA.</p></article>
+            <article><h2>Processamento assíncrono</h2><p>Uma fila desacopla o recebimento dos comentários da classificação.</p></article>
+            <article><h2>Resultados rastreáveis</h2><p>A API mantém os estados dos lotes, classificações e consumo de tokens.</p></article>
+        </section>
+        <section class="health-card" aria-labelledby="health-title">
+            <div class="health-heading">
+                <h2 id="health-title">Saúde da API</h2>
+                <button id="refresh" type="button">Atualizar status</button>
+            </div>
+            <div role="status" aria-live="polite" aria-atomic="true">
+                <p id="health-status" class="badge" data-state="loading">Aguardando consulta</p>
+                <p id="health-message">A saúde da API e das dependências será consultada ao abrir esta página.</p>
+                <p id="health-checked" class="muted">Nenhuma verificação realizada.</p>
+            </div>
+            <p class="health-note">O status agrega a saúde da API e das dependências monitoradas.
+                Não representa o andamento dos lotes.</p>
+            <noscript><p>Ative o JavaScript para consultar a saúde da API.</p></noscript>
+        </section>
+        <footer>SocialGuard · Classificação de conteúdo em lotes</footer>
+    </main>
+</body>
+</html>
