@@ -1,0 +1,40 @@
+{
+  "companyId": "apresentacao-socialguard",
+  "comments": [
+    {
+      "postId": "post-200",
+      "commentId": "e-001",
+      "name": "Carlos",
+      "email": "carlos@example.com",
+      "body": "Este comentário está correto."
+    },
+    {
+      "postId": "post-200",
+      "commentId": "e-002",
+      "name": "Sem corpo",
+      "email": "semcorpo@example.com"
+    },
+    {
+      "postId": 200,
+      "commentId": "e-003",
+      "name": "Tipo errado",
+      "email": "tipo@example.com",
+      "body": "postId deveria ser texto."
+    },
+    {
+      "postId": "post-200",
+      "commentId": "e-001",
+      "name": "Duplicado",
+      "email": "dup@example.com",
+      "body": "commentId repetido.",
+      "createdAt": "10/01/2025 09:30"
+    },
+    {
+      "postId": "post-200",
+      "commentId": "e-005",
+      "name": "Resultado indevido",
+      "body": "Não se envia a classificação.",
+      "inferenceResult": "SPAM"
+    }
+  ]
+}
