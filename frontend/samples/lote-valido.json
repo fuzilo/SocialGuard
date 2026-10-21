@@ -1,0 +1,38 @@
+{
+  "companyId": "apresentacao-socialguard",
+  "llmModel": "gpt-4",
+  "comments": [
+    {
+      "postId": "post-100",
+      "commentId": "c-001",
+      "name": "Maria Silva",
+      "email": "maria@example.com",
+      "body": "Adorei o atendimento, resolveram tudo muito rápido!",
+      "createdAt": "2025-01-10T09:30:00"
+    },
+    {
+      "postId": "post-100",
+      "commentId": "c-002",
+      "name": "Perfil promocional",
+      "email": "promo@example.com",
+      "body": "Ganhe dinheiro fácil! Clique neste link agora e informe seus dados.",
+      "createdAt": "2025-01-10T09:35:00"
+    },
+    {
+      "postId": "post-101",
+      "commentId": "c-003",
+      "name": "João Souza",
+      "email": "joao@example.com",
+      "body": "O produto chegou antes do prazo e bem embalado.",
+      "createdAt": "2025-01-10T10:02:00",
+      "updatedAt": "2025-01-10T10:05:00"
+    },
+    {
+      "postId": "post-101",
+      "commentId": "c-004",
+      "name": "Ana Lima",
+      "email": "ana@example.com",
+      "body": "Gostei bastante da nova campanha da marca."
+    }
+  ]
+}
